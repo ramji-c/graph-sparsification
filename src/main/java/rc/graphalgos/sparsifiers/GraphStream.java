@@ -1,12 +1,14 @@
 package rc.graphalgos.sparsifiers;
 
 import org.graphstream.graph.Graph;
+import org.graphstream.graph.Node;
 import org.graphstream.graph.implementations.*;
 
 import java.io.*;
 
 /***
- * wrapper that represents Graph as a dynamic stream. Reads an input graph and wraps it in a GraphStream API
+ * wrapper class to represent Graph as a dynamic stream. Reads an input graph file and wraps it in a GraphStream API
+ * object. contains additional transformation and representation functions, as well as utility display functions
  * author: Ramji Chandrasekaran
  * date: 21-Oct-2017
  */
@@ -14,6 +16,14 @@ public class GraphStream {
     Graph graph;
     long nodeCount;
     long edgeCount;
+
+    public long getNodeCount() {
+        return nodeCount;
+    }
+
+    public Graph getGraph() {
+        return graph;
+    }
 
     /***
      * default constructor
@@ -37,6 +47,8 @@ public class GraphStream {
                 edges = line.split("\t");
                 graph.addEdge(edges[0] + "to" + edges[1], edges[0], edges[1]);
             }
+            // add nodeId to each node
+            addNodeNumbers();
         } catch (FileNotFoundException e) {
             System.out.println("Invalid input file path - doesn't exist");
             e.printStackTrace();
@@ -51,6 +63,16 @@ public class GraphStream {
      */
     protected void printSubGraphs() {
         //TODO filter edges with same value for "inGi" attribute and display resulting graph
+    }
+
+    /***
+     * assign an integer id to each node in graph
+     */
+    private void addNodeNumbers() {
+        int nodeId = 0;
+        for(Node node: graph.getNodeSet()) {
+            node.setAttribute("nodeNum", nodeId++);
+        }
     }
 
     protected void printGraphStats() {
