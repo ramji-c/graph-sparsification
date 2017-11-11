@@ -26,7 +26,7 @@ public class SimpleSparsifier {
     /***
      * uniform hash function - h: E -> {0, 1}; map each edge to 0 or 1 uniformly
      * @param edge edge whose hash value should be computed
-     *             TODO compute hash value using the input edge
+     * TODO compute hash value using the input edge
      */
     private int getUniformHashValue(String edge) {
         float prob = randomNumber.nextFloat();

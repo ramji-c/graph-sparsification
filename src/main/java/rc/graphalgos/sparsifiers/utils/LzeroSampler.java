@@ -9,7 +9,6 @@ import java.util.Random;
  * implementation of a L0 sampler.
  */
 class LzeroSampler {
-    OpenMapRealMatrix hashingMatrix;
     private int numRows;
     private int numColumns;
 
@@ -19,7 +18,6 @@ class LzeroSampler {
      * @param numColumns is bounded # of distinct pairs of vertices
      */
     LzeroSampler(int numRows, int numColumns) {
-        hashingMatrix = new OpenMapRealMatrix(numRows, numColumns);
         this.numRows = numRows;
         this.numColumns = numColumns;
     }
@@ -33,42 +31,53 @@ class LzeroSampler {
      */
     private double[] getHashValues(int start, int end, int numValues) {
         Random randomHash = new Random(end);
-        return randomHash.ints(numValues, start, end+1).mapToDouble((x) -> ((double)x)).toArray();
+//        System.out.println(start + " " + end);
+        return randomHash.
+                ints(numValues, start, end+1).
+                mapToDouble((x) -> ((double)x)).
+                toArray();
     }
 
     /***
      * build hash matrix using getHashValues()
+     * Dimensions are n X (nC2), where 'n' = # nodes in graph
      */
-    void buildHashMatrix(){
+    OpenMapRealMatrix buildHashMatrix(){
+        OpenMapRealMatrix hashingMatrix = new OpenMapRealMatrix(numRows, numColumns);
         for(int row=0; row<numRows; row++) {
             int start = 0;
             int end = (int)(Math.pow(2, row) - 1);
             hashingMatrix.setRow(row, getHashValues(start, end, numColumns));
         }
+        return hashingMatrix;
     }
 
     /***
      * return index of a non-zero element from sketch
-     * @param sketchMatrix l0-sampling sketch
+     * @param sketchMatrix L0-sampling sketch
      * @return index of non-zero element, or -1 if no such element found
      */
     int sampleItem(OpenMapRealMatrix sketchMatrix){
         for(int row=0; row<numRows; row++){
             double[] sketchVector = sketchMatrix.getRow(row);
             //check if sketchVector[0] ~= 1, return sketchVector[1]/sketchVector[2]
-            if(sketchVector[0] == 1) {
-                return (int)sketchVector[1]/(int)sketchVector[2];
+            if(sketchVector[0] == 1.0) {
+                try{
+                    return (int)sketchVector[1]/(int)sketchVector[2];
+                } catch (ArithmeticException divByZero) {
+                    return -1;
+                }
             }
         }
         return -1;
     }
 
     /***
-     * build a sketch using hash matrix and given graph matrix
+     * build a sketch using hash matrix and given graph vector
      * @param nodeVector vector of input node in graph
      * @return matrix of Dj, Sj, Cj
      */
-    OpenMapRealMatrix buildSketch(OpenMapRealVector nodeVector){
+    OpenMapRealMatrix buildSketch(OpenMapRealVector nodeVector, OpenMapRealMatrix hashingMatrix){
         OpenMapRealMatrix sketchMatrix = new OpenMapRealMatrix(numRows, 3);
         //sketchRow[0] = Dj, sketchRow[1] = Sj, sketchRow[2] = Cj
         double[] sketchRow;
