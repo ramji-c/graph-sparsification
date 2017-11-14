@@ -4,9 +4,6 @@ import org.apache.commons.math3.linear.OpenMapRealMatrix;
 import org.apache.commons.math3.linear.OpenMapRealVector;
 import rc.graphalgos.sparsifiers.GraphStream;
 
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 
 /***
@@ -15,18 +12,20 @@ import java.util.*;
  * date: 27-Oct-2017
  */
 class SpanningForest {
-    private int numRows;    //# of nodes in graph
+    private int numNodes;    //# of nodes in graph
     private LzeroSampler lzeroSampler;
     private int numSketches;
+    private GraphStream graphStream;
 
     /***
      * default constructor
      * @param graphStream Graph object
      */
     SpanningForest(GraphStream graphStream) {
-        numRows = graphStream.getNodeCount();
-        int numColumns = (numRows * (numRows - 1)) / 2;
-        numSketches = (int)Math.ceil(Math.log(numRows)/Math.log(2.0d));
+        this.graphStream = graphStream;
+        numNodes = graphStream.getNodeCount();
+        int numColumns = (numNodes * (numNodes - 1)) / 2;
+        numSketches = (int)Math.ceil(Math.log(numNodes)/Math.log(2.0d));
         lzeroSampler = new LzeroSampler(numSketches, numColumns);
     }
 
@@ -51,7 +50,7 @@ class SpanningForest {
     List<Map> getSketches(List<OpenMapRealVector> nodeVectors) {
         OpenMapRealMatrix[] sketchMatrices = getSketchMatrices(numSketches);
         List<Map> nodeSketches = new ArrayList<>();
-        for(int i=0; i<numRows; i++) {
+        for(int i = 0; i< numNodes; i++) {
             Map<Integer, OpenMapRealMatrix> nodeSketch = new HashMap<>();
             for(int sketchId=0; sketchId<numSketches; sketchId++) {
                 OpenMapRealMatrix sketch = lzeroSampler.
@@ -72,7 +71,6 @@ class SpanningForest {
         //combine sketches of given nodes
         //set combinedSketch to the first sketch and add other sketches iteratively
         OpenMapRealMatrix combinedSketch = sketches.get(0);
-        System.out.println(combinedSketch);
         for(OpenMapRealMatrix sketch: sketches.subList(1, sketches.size())) {
             combinedSketch = combinedSketch.add(sketch);
         }
@@ -86,20 +84,21 @@ class SpanningForest {
      * @param level recursion level - different sketch is used for each level
      * @return connected components of input graph
      */
-    private List<Map> getConnectedComponents(List<Map> nodeSketches, List<List> superNodes, int level) {
+    private List<List<Integer>> buildSpanningForest(List<Map> nodeSketches, List<List<Integer>> superNodes, int level) {
+        List<Integer> sampledEdges = new ArrayList<>();
         for(List superNode: superNodes) {
             List<OpenMapRealMatrix> superNodeSketches = new ArrayList<>();
-            List<Integer> sampledEdges = new ArrayList<>();
             for(Object node: superNode) {
                 superNodeSketches.add((OpenMapRealMatrix)nodeSketches.get((int)node).get(level));
             }
-            int sampledEdge = sampleEdge(superNodeSketches);
-            System.out.println(sampledEdge);
-            sampledEdges.add(sampledEdge);
-            // build connected component from the list of sampled edges
-
+            sampledEdges.add(sampleEdge(superNodeSketches));
         }
-        return null;
+        if(Collections.frequency(sampledEdges, -1) == sampledEdges.size()){
+            System.out.println("No Edges sampled");
+            return superNodes;
+        } else {
+            return buildSpanningForest(nodeSketches, findConnectedComponents(sampledEdges, superNodes), ++level);
+        }
     }
 
     /***
@@ -107,16 +106,57 @@ class SpanningForest {
      * @param graphMatrix list of node vectors
      * @param nodeCount # nodes in graph
      */
-    protected void findSpanningForest(List<OpenMapRealVector> graphMatrix, int nodeCount) {
+    protected List<List<Integer>> findSpanningForest(List<OpenMapRealVector> graphMatrix, int nodeCount) {
         // loop over sketches and construct super-nodes
         List<Map> sketches = getSketches(graphMatrix);
         // initialize super nodes
-        List<List> superNodes = new ArrayList<>();
+        List<List<Integer>> superNodes = new ArrayList<>();
         for(int i=0; i<nodeCount; i++) {
             List<Integer> nodes = new ArrayList<>();
             nodes.add(i);
             superNodes.add(nodes);
         }
-        List<Map> connectedComponents = getConnectedComponents(sketches, superNodes, 0);
+        return buildSpanningForest(sketches, superNodes, 0);
+    }
+
+    private List<List<Integer>> findConnectedComponents(List<Integer> sampledEdges, List<List<Integer>> superNodes) {
+        List<int[]> edges = new ArrayList<>();
+//        List<List> connectedComponents = new ArrayList<>();
+        for(int edge: sampledEdges) {
+            edges.add(getEdgeFromIndex(edge, numNodes));
+        }
+        for(int[] edge: edges) {
+            //check if a sampled edge has an endpoint in a supernode
+            List<Integer> ccIndices = new ArrayList<>();
+            for(int endPoint: edge) {
+                for(int i=0; i<superNodes.size(); i++) {
+                    List superNode = superNodes.get(i);
+                    if(superNode.indexOf(endPoint) != -1) {
+                        ccIndices.add(i);
+                    }
+                }
+
+            }
+            //combine two supernodes that are connected by a sampled edge
+            superNodes.get(ccIndices.get(0)).addAll(superNodes.get(ccIndices.get(1)));
+            superNodes.remove(ccIndices.get(1));
+        }
+
+        return superNodes;
+    }
+
+    public int[] getEdgeFromIndex(int edgeIndex, int numNodes) {
+        int nMinusK=0;
+        int index=0;
+        int[] nodes = new int[2];
+        for(int i=numNodes-1; i>0; i--) {
+            if(nMinusK+i>edgeIndex)
+                break;
+            nMinusK+=i;
+            index=numNodes-i;
+        }
+        nodes[0] = index+1;
+        nodes[1] = edgeIndex - nMinusK + 1 + nodes[0];
+        return nodes;
     }
 }

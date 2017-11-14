@@ -8,6 +8,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GraphStreamTest {
+
     GraphStream graphStream = new GraphStream("Test");
     @Test
     void buildGraphMatrix() {
@@ -32,5 +33,4 @@ class GraphStreamTest {
             }
         }
     }
-
 }

@@ -12,10 +12,17 @@ class SpanningForestTest {
     void findSpanningForest() {
         GraphStream graphStream = new GraphStream("wiki_votes");
         graphStream.buildGraph("/home/ramji/IdeaProjects/graph_sparsification/src/main" +
-                "/resources/graphs/test_graph.txt");
+                "/resources/graphs/email-Eu-core.txt");
 //        graphStream.printGraphStats();
-        SpanningForest spanningForest = new SpanningForest(graphStream);
-        spanningForest.findSpanningForest(graphStream.buildGraphMatrix(), graphStream.getNodeCount());
+        SpanningForest spanningForestObj = new SpanningForest(graphStream);
+        List<List<Integer>> spanningForest = spanningForestObj.findSpanningForest(graphStream.buildGraphMatrix(), graphStream
+                .getNodeCount());
+        for(List<Integer> cc: spanningForest) {
+            for(int node: cc) {
+                System.out.format("%d\t", node);
+            }
+            System.out.println();
+        }
     }
 
     @Test
