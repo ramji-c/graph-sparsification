@@ -30,7 +30,7 @@ class LzeroSampler {
      * @return array of hash values
      */
     private double[] getHashValues(int start, int end, int numValues) {
-        Random randomHash = new Random(end);
+        Random randomHash = new Random();
 //        System.out.println(start + " " + end);
         return randomHash.
                 ints(numValues, start, end+1).
@@ -65,7 +65,7 @@ class LzeroSampler {
                 try{
                     return (int)sketchVector[1]/(int)sketchVector[2];
                 } catch (ArithmeticException divByZero) {
-                    return -1;
+                    //do nothing
                 }
             }
         }

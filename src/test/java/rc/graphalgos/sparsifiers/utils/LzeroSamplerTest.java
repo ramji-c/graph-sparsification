@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class LzeroSamplerTest {
     private int numRows = 20;
-    private int numColumns = 50;
+    private int numColumns = 5000;
     @Test
     void buildHashMatrix() {
             LzeroSampler sampler = new LzeroSampler(numRows, numColumns);
