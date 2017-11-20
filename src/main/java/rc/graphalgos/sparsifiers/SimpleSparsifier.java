@@ -11,6 +11,7 @@ import java.util.*;
 public class SimpleSparsifier {
     private GraphStream graphStream;
     private Random randomNumber;
+    private static final long MiB = 1024L * 1024L;
 
     /***
      * default constructor
@@ -72,9 +73,12 @@ public class SimpleSparsifier {
         // max iterations is set to 2*log(numNodes)
         int numNodes = graphStream.graph.getNodeCount();
         int maxIter = 2 * (int)Math.ceil(Math.log(numNodes)/Math.log(2.0d));
-        System.out.println(maxIter);
         // run the MinCut algorithm
         findMinCut(maxIter);
+    }
+
+    private static long bytesToMegabytes(long bytes) {
+        return bytes / MiB;
     }
 
     public static void main(String args[]) {
@@ -83,6 +87,10 @@ public class SimpleSparsifier {
         }
         SimpleSparsifier simpleSparsifier = new SimpleSparsifier(args[0], args[1]);
         simpleSparsifier.sparsify();
+        Runtime runtime = Runtime.getRuntime();
+        runtime.gc();
+        long memUsage = runtime.totalMemory() - runtime.freeMemory();
+        System.out.println("Memory usage: " + bytesToMegabytes(memUsage) + " MiB");
 //        simpleSparsifier.graphStream.printGraphStats();
     }
 }

@@ -22,10 +22,6 @@ public class GraphStream {
         return graph.getNodeCount();
     }
 
-    public Graph getGraph() {
-        return graph;
-    }
-
     /***
      * default constructor
      * @param graph_name name of input graph
@@ -116,13 +112,6 @@ public class GraphStream {
     }
 
     /***
-     * print subgraphs identified by edge attributes
-     */
-    protected void printSubGraphs() {
-        //TODO filter edges with same value for "inGi" attribute and display resulting graph
-    }
-
-    /***
      * assign an integer id to each node in graph
      */
     private void addNodeNumbers() {
@@ -144,9 +133,8 @@ public class GraphStream {
     }
 
     public static void main(String args[]) {
-        GraphStream graphStream = new GraphStream("wiki_votes");
-        graphStream.buildGraph("/home/ramji/IdeaProjects/graph_sparsification/src/main" +
-                "/resources/graphs/Wiki-Vote.txt");
+        GraphStream graphStream = new GraphStream("Graph");
+        graphStream.buildGraph(args[0]);
         graphStream.printGraphStats();
     }
 }

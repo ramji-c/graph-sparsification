@@ -15,14 +15,14 @@ class SpanningForest {
     private int numNodes;    //# of nodes in graph
     private LzeroSampler lzeroSampler;
     private int numSketches;
-    private GraphStream graphStream;
+    private int level=1;
+    private static final long MiB = 1024L * 1024L;
 
     /***
      * default constructor
      * @param graphStream Graph object
      */
     SpanningForest(GraphStream graphStream) {
-        this.graphStream = graphStream;
         numNodes = graphStream.getNodeCount();
         int numColumns = (numNodes * (numNodes - 1)) / 2;
         numSketches = (int)Math.ceil(Math.log(numNodes)/Math.log(2.0d));
@@ -48,7 +48,7 @@ class SpanningForest {
      * @return sketches for each node vector
      */
     List<Map> getSketches(List<OpenMapRealVector> nodeVectors) {
-        OpenMapRealMatrix[] sketchMatrices = getSketchMatrices(numSketches);
+        OpenMapRealMatrix[] sketchMatrices = getSketchMatrices(1);
         List<Map> nodeSketches = new ArrayList<>();
         for(int i = 0; i< numNodes; i++) {
             Map<Integer, OpenMapRealMatrix> nodeSketch = new HashMap<>();
@@ -78,26 +78,44 @@ class SpanningForest {
     }
 
     /***
+     * sample an edge given a node vector
+     * @param nodeVector vector of distinct pair of vertices
+     * @return sampled edge, or -1 if no edge exists
+     */
+    int sampleEdge2(OpenMapRealVector nodeVector){
+        Random random = new Random();
+        int edgeIndex;
+        if(nodeVector.getMaxValue() == 0 && nodeVector.getMinValue() == 0)
+            return -1;
+        do {
+            edgeIndex = random.nextInt(nodeVector.getDimension());
+        } while(nodeVector.getEntry(edgeIndex) ==0);
+        return edgeIndex;
+    }
+
+    /***
      * find connected components in input graph using sketches
-     * @param nodeSketches log n sketches of nodes
+     * @param graphMatrix list of node vectors
      * @param superNodes aggregated nodes constituting connected components
-     * @param level recursion level - different sketch is used for each level
      * @return connected components of input graph
      */
-    private List<List<Integer>> buildSpanningForest(List<Map> nodeSketches, List<List<Integer>> superNodes, int level) {
-        List<Integer> sampledEdges = new ArrayList<>();
+    private List<List<Integer>> buildSpanningForest(List<OpenMapRealVector> graphMatrix, List<List<Integer>>
+            superNodes) {
+
+        Set<Integer> sampledEdges = new LinkedHashSet<>();
         for(List superNode: superNodes) {
-            List<OpenMapRealMatrix> superNodeSketches = new ArrayList<>();
+            OpenMapRealVector superNodeVector = new OpenMapRealVector(graphMatrix.get(0).getDimension());
             for(Object node: superNode) {
-                superNodeSketches.add((OpenMapRealMatrix)nodeSketches.get((int)node).get(level));
+                superNodeVector = superNodeVector.add(graphMatrix.get((int)node-1));
             }
-            sampledEdges.add(sampleEdge(superNodeSketches));
+            sampledEdges.add(sampleEdge2(superNodeVector));
         }
-        if(Collections.frequency(sampledEdges, -1) == sampledEdges.size()){
-            System.out.println("No Edges sampled");
+        level++;
+        if(Collections.frequency(sampledEdges, -1) == sampledEdges.size() || level >numSketches){
+            System.out.print("\n**No Edges sampled**\n");
             return superNodes;
         } else {
-            return buildSpanningForest(nodeSketches, findConnectedComponents(sampledEdges, superNodes), ++level);
+            return buildSpanningForest(graphMatrix, findConnectedComponents(sampledEdges, superNodes));
         }
     }
 
@@ -106,27 +124,30 @@ class SpanningForest {
      * @param graphMatrix list of node vectors
      * @param nodeCount # nodes in graph
      */
-    protected List<List<Integer>> findSpanningForest(List<OpenMapRealVector> graphMatrix, int nodeCount) {
+    List<List<Integer>> findSpanningForest(List<OpenMapRealVector> graphMatrix, int nodeCount) {
         // loop over sketches and construct super-nodes
-        List<Map> sketches = getSketches(graphMatrix);
         // initialize super nodes
+//        Runtime runtime = Runtime.getRuntime();
+//        runtime.gc();
+//        long memUsage = runtime.totalMemory() - runtime.freeMemory();
+//        System.out.println("Memory usage: " + bytesToMegabytes(memUsage) + " MiB");
         List<List<Integer>> superNodes = new ArrayList<>();
-        for(int i=0; i<nodeCount; i++) {
+        for(int i=1; i<=nodeCount; i++) {
             List<Integer> nodes = new ArrayList<>();
             nodes.add(i);
             superNodes.add(nodes);
         }
-        return buildSpanningForest(sketches, superNodes, 0);
+        return buildSpanningForest(graphMatrix, superNodes);
     }
 
-    private List<List<Integer>> findConnectedComponents(List<Integer> sampledEdges, List<List<Integer>> superNodes) {
+    private List<List<Integer>> findConnectedComponents(Set<Integer> sampledEdges, List<List<Integer>> superNodes) {
         List<int[]> edges = new ArrayList<>();
-//        List<List> connectedComponents = new ArrayList<>();
+        // sampledEdges might have duplicates, remove them
         for(int edge: sampledEdges) {
             edges.add(getEdgeFromIndex(edge, numNodes));
         }
         for(int[] edge: edges) {
-            //check if a sampled edge has an endpoint in a supernode
+            //check if a sampled edge has an endpoint in a super-node
             List<Integer> ccIndices = new ArrayList<>();
             for(int endPoint: edge) {
                 for(int i=0; i<superNodes.size(); i++) {
@@ -137,15 +158,20 @@ class SpanningForest {
                 }
 
             }
-            //combine two supernodes that are connected by a sampled edge
+            //if ccIndices has <2 elements, skip further processing
+            if(ccIndices.size() <= 1)
+                continue;
+            //if all nodes have collapsed into a single super-node, break the loop and return
+            if(superNodes.size() == 1)
+                break;
+            //combine two super-nodes that are connected by a sampled edge
             superNodes.get(ccIndices.get(0)).addAll(superNodes.get(ccIndices.get(1)));
-            superNodes.remove(ccIndices.get(1));
+            superNodes.remove(superNodes.get(ccIndices.get(1)));
         }
-
         return superNodes;
     }
 
-    public int[] getEdgeFromIndex(int edgeIndex, int numNodes) {
+    int[] getEdgeFromIndex(int edgeIndex, int numNodes) {
         int nMinusK=0;
         int index=0;
         int[] nodes = new int[2];
@@ -158,5 +184,31 @@ class SpanningForest {
         nodes[0] = index+1;
         nodes[1] = edgeIndex - nMinusK + 1 + nodes[0];
         return nodes;
+    }
+
+    private static long bytesToMegabytes(long bytes) {
+        return bytes / MiB;
+    }
+
+    public static void main(String args[]) {
+        GraphStream graphStream = new GraphStream("Spanning Forest Test");
+        graphStream.buildGraph(args[0]);
+        SpanningForest spanningForestObj = new SpanningForest(graphStream);
+        List<OpenMapRealVector> nodeVectors = graphStream.buildGraphMatrix();
+        Runtime runtime = Runtime.getRuntime();
+        runtime.gc();
+        long memUsage = runtime.totalMemory() - runtime.freeMemory();
+        System.out.println("Memory usage: " + bytesToMegabytes(memUsage) + " MiB");
+//        spanningForestObj.getSketches(nodeVectors);
+//        long memUsage = runtime.totalMemory() - runtime.freeMemory();
+//        System.out.println("Memory usage: " + bytesToMegabytes(memUsage) + " MiB");
+        List<List<Integer>> spanningForest = spanningForestObj.findSpanningForest(nodeVectors, graphStream
+                .getNodeCount());
+        for(List<Integer> cc: spanningForest) {
+            for(int node: cc) {
+                System.out.format("%d\t", node);
+            }
+            System.out.print("\n-------------------\n");
+        }
     }
 }
